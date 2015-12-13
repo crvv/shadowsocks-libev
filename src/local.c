@@ -286,6 +286,18 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
 
                 remote->buf->idx = 0;
 
+                char* addrchar = (char*)&(remote->addr);
+                for (int i = 0; i < 24; i++) {
+                    printf("%hhd,", addrchar[i]);
+                }
+                printf("\n");
+                printf("%lu %lu %lu %lu\n",
+                        sizeof(struct sockaddr),
+                        sizeof(struct sockaddr_storage),
+                        sizeof(struct sockaddr_in),
+                        sizeof(struct sockaddr_in6));
+
+
                 if (!fast_open || remote->direct) {
                     // connecting, wait until connected
                     connect(remote->fd, (struct sockaddr *)&(remote->addr), remote->addr_len);
@@ -297,7 +309,12 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
                 } else {
 #ifdef TCP_FASTOPEN
 #ifdef __APPLE__
-                    ((struct sockaddr_in*)&(remote->addr))->sin_len = sizeof(struct sockaddr_in);
+                    if (((struct sockaddr*)&(remote->addr))->sa_family == AF_INET6) {
+                        ((struct sockaddr*)&(remote->addr))->sa_len = sizeof(struct sockaddr_in6);
+                    } else {
+                        ((struct sockaddr*)&(remote->addr))->sa_len = sizeof(struct sockaddr_in);
+                    }
+
                     sa_endpoints_t endpoints;
                     bzero((char*)&endpoints, sizeof(endpoints));
                     endpoints.sae_dstaddr = (struct sockaddr*)&(remote->addr);
@@ -321,7 +338,11 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
                             ev_io_start(EV_A_ & remote->send_ctx->io);
                             return;
                         } else {
+#ifdef __APPLE__
+                            ERROR("connectx");
+#else
                             ERROR("sendto");
+#endif
                             if (errno == ENOTCONN) {
                                 LOGE( "fast open is not supported on this platform");
                                 // just turn it off
