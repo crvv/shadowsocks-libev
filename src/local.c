@@ -286,18 +286,6 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
 
                 remote->buf->idx = 0;
 
-                char* addrchar = (char*)&(remote->addr);
-                for (int i = 0; i < 24; i++) {
-                    printf("%hhd,", addrchar[i]);
-                }
-                printf("\n");
-                printf("%lu %lu %lu %lu\n",
-                        sizeof(struct sockaddr),
-                        sizeof(struct sockaddr_storage),
-                        sizeof(struct sockaddr_in),
-                        sizeof(struct sockaddr_in6));
-
-
                 if (!fast_open || remote->direct) {
                     // connecting, wait until connected
                     connect(remote->fd, (struct sockaddr *)&(remote->addr), remote->addr_len);
