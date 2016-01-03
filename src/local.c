@@ -297,6 +297,7 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
                 } else {
 #ifdef TCP_FASTOPEN
 #ifdef __APPLE__
+                    printf("connectx fast open\n");
                     if (((struct sockaddr*)&(remote->addr))->sa_family == AF_INET6) {
                         ((struct sockaddr*)&(remote->addr))->sa_len = sizeof(struct sockaddr_in6);
                     } else {
@@ -311,9 +312,11 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
                     int s = connectx(remote->fd, &endpoints, SAE_ASSOCID_ANY,
                             CONNECT_RESUME_ON_READ_WRITE | CONNECT_DATA_IDEMPOTENT,
                             NULL, 0, NULL, NULL);
+                    printf("%d  remote->buf->len: %zu\n", s, remote->buf->len);
                     if (s == 0) {
                         s = send(remote->fd, remote->buf->array, remote->buf->len, 0);
                     }
+                    printf("%d  remote->buf->len: %zu\n", s, remote->buf->len);
 #else
                     int s = sendto(remote->fd, remote->buf->array, remote->buf->len, MSG_FASTOPEN,
                                    (struct sockaddr *)&(remote->addr), remote->addr_len);
@@ -343,6 +346,9 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
                     } else if (s <= remote->buf->len) {
                         remote->buf->len -= s;
                         remote->buf->idx  = s;
+                    } else {
+                        LOGE("can't come here");
+                        exit(1);
                     }
 
                     // Just connected
@@ -356,6 +362,7 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
 #endif
                 }
             } else {
+                printf("connected\n");
                 int s = send(remote->fd, remote->buf->array, remote->buf->len, 0);
                 if (s == -1) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -365,17 +372,21 @@ static void server_recv_cb(EV_P_ ev_io *w, int revents)
                         ev_io_start(EV_A_ & remote->send_ctx->io);
                         return;
                     } else {
+                        printf("server_recv_cb_send\n");
                         ERROR("server_recv_cb_send");
                         close_and_free_remote(EV_A_ remote);
                         close_and_free_server(EV_A_ server);
                         return;
                     }
-                } else if (s < remote->buf->len) {
+                } else if (s <= remote->buf->len) {
                     remote->buf->len -= s;
                     remote->buf->idx  = s;
                     ev_io_stop(EV_A_ & server_recv_ctx->io);
                     ev_io_start(EV_A_ & remote->send_ctx->io);
                     return;
+                } else {
+                    LOGE("can't come here");
+                    exit(1);
                 }
             }
 
@@ -702,7 +713,7 @@ static void remote_recv_cb(EV_P_ ev_io *w, int revents)
             close_and_free_server(EV_A_ server);
             return;
         }
-    } else if (s < server->buf->len) {
+    } else if (s <= server->buf->len) {
         server->buf->len -= s;
         server->buf->idx  = s;
         ev_io_stop(EV_A_ & remote_recv_ctx->io);
